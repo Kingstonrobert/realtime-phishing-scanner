@@ -1,0 +1,36 @@
+{
+  "num_samples": 1000,
+  "model_backend": "onnx_runtime",
+  "sla_target_ms": 100.0,
+  "sla_passed": true,
+  "components": {
+    "feature_extraction_mean_ms": 0.0667,
+    "feature_extraction_p95_ms": 0.1149,
+    "model_inference_mean_ms": 0.0341,
+    "model_inference_p95_ms": 0.0716
+  },
+  "cold_scan": {
+    "throughput_req_per_sec": 9255.3,
+    "mean_ms": 0.1077,
+    "p50_ms": 0.0906,
+    "p90_ms": 0.1586,
+    "p95_ms": 0.215,
+    "p99_ms": 0.3126,
+    "min_ms": 0.003,
+    "max_ms": 0.6443
+  },
+  "warm_scan": {
+    "throughput_req_per_sec": 591576.0,
+    "mean_ms": 0.0015,
+    "p50_ms": 0.0014,
+    "p95_ms": 0.0018,
+    "p99_ms": 0.0039
+  },
+  "cache_stats": {
+    "size": 989,
+    "capacity": 50000,
+    "hits": 1011,
+    "misses": 989,
+    "hit_ratio": 0.5055
+  }
+}

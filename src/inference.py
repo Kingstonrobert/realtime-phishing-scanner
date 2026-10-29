@@ -187,6 +187,11 @@ class PhishingScanner:
 
         # 3. Model inference (< 0.5 ms)
         risk_score = self._predict_raw(feature_vec)
+
+        # Typosquatting & visual confusable brand spoofing (e.g. rnicrosoft.com, paypa1.com)
+        if f_dict.get("is_typosquatting", 0) > 0:
+            risk_score = max(risk_score, 0.98)
+
         is_phishing = bool(risk_score >= self.threshold)
         classification = "phishing" if is_phishing else "benign"
 

@@ -140,16 +140,22 @@ def generate_phishing_url(rng: random.Random) -> str:
         return f"{scheme}://{brand}-{kw}-{word}.{tld}/{kw2}{ext}{query_str}"
 
     elif archetype == "homoglyph_punycode":
-        # Punycode / typo spoofing
+        # Punycode / typo spoofing & visual confusables (e.g. rn -> m)
         puny_variants = [
             f"xn--{brand}-v9a.{tld}",
             f"xn--gogle-pra.{tld}",
             f"xn--pple-43d.{tld}",
             f"{brand.replace('o', '0').replace('l', '1')}-{kw}.{tld}",
+            f"rnicrosoft.{rng.choice(['com', 'net', 'org', tld])}",
+            f"arnazon.{rng.choice(['com', 'net', 'org', tld])}",
+            f"paypa1.{rng.choice(['com', 'net', 'org', tld])}",
+            f"goog1e.{rng.choice(['com', 'net', 'org', tld])}",
+            f"applfe.{rng.choice(['com', 'net', 'org', tld])}",
         ]
         chosen = rng.choice(puny_variants)
         query_str = f"?ref={rng.randint(100, 999)}" if has_query else ""
-        return f"{scheme}://{chosen}/{kw}{ext}{query_str}"
+        path_str = f"/{kw}{ext}" if rng.random() > 0.4 else ""
+        return f"{scheme}://{chosen}{path_str}{query_str}"
 
     elif archetype == "dga_high_entropy":
         # DGA domain

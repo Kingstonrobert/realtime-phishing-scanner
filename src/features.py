@@ -65,6 +65,61 @@ HOMOGLYPH_RANGES = [
     (0xFF00, 0xFFEF),  # Halfwidth and Fullwidth forms
 ]
 
+# Protected brand names targeted by typosquatting and visual confusables
+PROTECTED_BRANDS = [
+    "microsoft", "google", "paypal", "apple", "amazon", "netflix",
+    "chase", "wellsfargo", "bankofamerica", "binance", "metamask",
+    "coinbase", "facebook", "instagram", "dhl", "fedex", "usps",
+    "twitter", "ebay", "linkedin", "outlook", "office365", "github",
+    "dropbox", "adobe", "spotify", "yahoo", "steam"
+]
+
+# Visual multi-character and symbol confusable mappings (e.g., 'rn' visually looks like 'm')
+VISUAL_CONFUSABLE_MAP = [
+    ("rn", "m"),
+    ("vv", "w"),
+    ("cl", "d"),
+    ("0", "o"),
+    ("1", "l"),
+    ("5", "s"),
+]
+
+
+def check_typosquatting(domain: str) -> Tuple[bool, float, Optional[str], Optional[str]]:
+    """Detect visual confusables (e.g. rn -> m) and typosquatting against top target brands."""
+    import difflib
+    clean = domain.split(":")[0].strip().lower()
+    parts = clean.split(".")
+    # Extract second-level domain / main brand token
+    sld = parts[-2] if len(parts) >= 2 else parts[0]
+
+    # 1. Visual confusable substitution check (e.g. rnicrosoft -> microsoft)
+    norm_sld = sld
+    for src, dst in VISUAL_CONFUSABLE_MAP:
+        norm_sld = norm_sld.replace(src, dst)
+
+    for brand in PROTECTED_BRANDS:
+        # Check if visual substitution creates an exact match to a protected brand
+        if norm_sld == brand and sld != brand:
+            return True, 1.0, brand, "visual_confusable"
+
+        # Check token-level exact visual substitution if hyphens exist (e.g. rnicrosoft-verify)
+        tokens = re.split(r"[\W_]+", sld)
+        for tok in tokens:
+            norm_tok = tok
+            for src, dst in VISUAL_CONFUSABLE_MAP:
+                norm_tok = norm_tok.replace(src, dst)
+            if norm_tok == brand and tok != brand:
+                return True, 1.0, brand, "visual_confusable"
+
+        # 2. Levenshtein / ratio typosquatting similarity (e.g. paypa1, mcirosoft, googel)
+        if sld != brand:
+            ratio = difflib.SequenceMatcher(None, sld, brand).ratio()
+            if ratio >= 0.83:
+                return True, float(ratio), brand, "typosquat_edit"
+
+    return False, 0.0, None, None
+
 FEATURE_NAMES = [
     "url_length",
     "domain_length",
@@ -95,6 +150,8 @@ FEATURE_NAMES = [
     "is_suspicious_tld",
     "is_punycode",
     "has_homoglyphs",
+    "is_typosquatting",
+    "typosquat_similarity",
     "risk_keyword_count",
     "risk_keyword_score",
     "has_login_keyword",
@@ -233,6 +290,11 @@ def extract_features_dict(raw_url: str) -> Dict[str, float]:
     is_punycode = 1.0 if ("xn--" in domain or "xn--" in url) else 0.0
     has_homoglyphs = 1.0 if check_homoglyphs(url) else 0.0
 
+    # Typosquatting & visual confusable detection (e.g. rnicrosoft.com, paypa1.com)
+    is_typo, typo_sim, typo_brand, typo_type = check_typosquatting(domain)
+    is_typosquatting = 1.0 if is_typo else 0.0
+    typosquat_similarity = float(typo_sim)
+
     # Risk keywords search across path, query, and domain
     lower_url = unquote(url).lower()
     risk_keyword_count = 0.0
@@ -293,6 +355,8 @@ def extract_features_dict(raw_url: str) -> Dict[str, float]:
         "is_suspicious_tld": is_suspicious_tld,
         "is_punycode": is_punycode,
         "has_homoglyphs": has_homoglyphs,
+        "is_typosquatting": is_typosquatting,
+        "typosquat_similarity": typosquat_similarity,
         "risk_keyword_count": risk_keyword_count,
         "risk_keyword_score": risk_keyword_score,
         "has_login_keyword": has_login_keyword,
@@ -326,6 +390,15 @@ def identify_risk_factors(raw_url: str, features: Optional[Dict[str, float]] = N
         reasons.append("Punycode (xn--) domain detected; potential homograph spoofing")
     if f.get("has_homoglyphs", 0) > 0:
         reasons.append("Cyrillic/Greek homoglyphic characters mimicking Latin script")
+    if f.get("is_typosquatting", 0) > 0:
+        url_str, parsed_u, _ = clean_and_parse_url(raw_url)
+        d_str = parsed_u.netloc or parsed_u.path.split("/")[0]
+        _, _, typo_brand, typo_type = check_typosquatting(d_str)
+        target_name = typo_brand.title() if typo_brand else "major brand"
+        if typo_type == "visual_confusable":
+            reasons.append(f"Visual confusable domain spoofing detected: visually impersonates '{target_name}' (e.g. 'rn' mimicking 'm' or character substitution)")
+        else:
+            reasons.append(f"Typosquatting detected: domain deceptively mimics '{target_name}' with high character similarity")
     if f.get("is_suspicious_tld", 0) > 0:
         reasons.append("Top-Level Domain (TLD) associated with high-frequency malicious abuse")
     if f.get("num_at", 0) > 0:

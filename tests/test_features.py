@@ -57,6 +57,23 @@ def test_homoglyph_detection():
     assert check_homoglyphs(spoofed)
 
 
+def test_visual_confusables_and_typosquatting():
+    """Verify detection of visual ASCII substitutions like rn -> m, 0 -> o, 1 -> l."""
+    # 'rn' mimicking 'm' in 'rnicrosoft'
+    f_rn = extract_features_dict("http://rnicrosoft.com")
+    assert f_rn["is_typosquatting"] == 1.0
+    reasons_rn = identify_risk_factors("http://rnicrosoft.com", f_rn)
+    assert any("Microsoft" in r and "rn" in r for r in reasons_rn)
+
+    # '1' mimicking 'l' in 'paypa1'
+    f_pay = extract_features_dict("http://paypa1.com")
+    assert f_pay["is_typosquatting"] == 1.0
+
+    # Legitimate Microsoft
+    f_legit = extract_features_dict("https://www.microsoft.com")
+    assert f_legit["is_typosquatting"] == 0.0
+
+
 def test_punycode_detection():
     """Verify Punycode detection flag."""
     puny_url = "http://xn--gogle-pra.com/signin"
